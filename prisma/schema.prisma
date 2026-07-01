@@ -1,0 +1,167 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum Theme {
+  LIGHT
+  DARK
+  SYSTEM
+}
+
+enum ChitStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum MonthStatus {
+  PENDING
+  AUCTION_DONE
+  COMPLETED
+}
+
+enum ActivityAction {
+  CREATE
+  UPDATE
+  DELETE
+  CALCULATE
+}
+
+/// Mirrors a Supabase auth.users row 1:1 (id is the auth user id).
+model Profile {
+  id        String   @id @db.Uuid
+  fullName  String
+  email     String   @unique
+  phone     String   @unique
+  avatarUrl String?
+  theme     Theme    @default(SYSTEM)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  chits        Chit[]
+  members      Member[]
+  activityLogs ActivityLog[]
+
+  @@map("profiles")
+}
+
+model Member {
+  id        String   @id @default(uuid())
+  ownerId   String   @db.Uuid
+  owner     Profile  @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  name      String
+  phone     String
+  email     String?
+  address   String?
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  chitMembers ChitMember[]
+
+  @@unique([ownerId, phone])
+  @@unique([ownerId, name])
+  @@index([ownerId])
+  @@map("members")
+}
+
+model Chit {
+  id              String     @id @default(uuid())
+  ownerId         String     @db.Uuid
+  owner           Profile    @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  name            String
+  totalAmount     Decimal    @db.Decimal(12, 2)
+  numberOfMonths  Int
+  numberOfMembers Int
+  description     String?
+  status          ChitStatus @default(ACTIVE)
+
+  startMonth Int?
+  startYear  Int?
+  endMonth   Int?
+  endYear    Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  chitMembers     ChitMember[]
+  monthlyAuctions MonthlyAuction[]
+
+  @@index([ownerId])
+  @@map("chits")
+}
+
+model ChitMember {
+  id       String   @id @default(uuid())
+  chitId   String
+  chit     Chit     @relation(fields: [chitId], references: [id], onDelete: Cascade)
+  memberId String
+  member   Member   @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  joinedAt DateTime @default(now())
+
+  @@unique([chitId, memberId])
+  @@index([chitId])
+  @@map("chit_members")
+}
+
+model MonthlyAuction {
+  id         String      @id @default(uuid())
+  chitId     String
+  chit       Chit        @relation(fields: [chitId], references: [id], onDelete: Cascade)
+  monthIndex Int
+  monthLabel String
+  status     MonthStatus @default(PENDING)
+
+  calculation MonthlyCalculation?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([chitId, monthIndex])
+  @@index([chitId])
+  @@map("monthly_auctions")
+}
+
+model MonthlyCalculation {
+  id               String         @id @default(uuid())
+  monthlyAuctionId String         @unique
+  monthlyAuction   MonthlyAuction @relation(fields: [monthlyAuctionId], references: [id], onDelete: Cascade)
+
+  interestPercent   Decimal @db.Decimal(5, 2)
+  chitAmount        Decimal @db.Decimal(12, 2)
+  totalMonths       Int
+  commissionPercent Decimal @db.Decimal(5, 2)
+  totalMembers      Int
+  auctionAmount     Decimal @db.Decimal(12, 2)
+
+  agentCommission   Decimal @db.Decimal(12, 2)
+  netAmount         Decimal @db.Decimal(12, 2)
+  dividend          Decimal @db.Decimal(12, 2)
+  dividendPerMember Decimal @db.Decimal(12, 2)
+  payablePerPerson  Decimal @db.Decimal(12, 2)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("monthly_calculations")
+}
+
+model ActivityLog {
+  id        String         @id @default(uuid())
+  ownerId   String         @db.Uuid
+  owner     Profile        @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  action    ActivityAction
+  entity    String
+  entityId  String
+  message   String
+  createdAt DateTime       @default(now())
+
+  @@index([ownerId, createdAt])
+  @@map("activity_logs")
+}
