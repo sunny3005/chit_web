@@ -3,7 +3,6 @@ import { redirect } from "next/navigation";
 import { Wallet } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/prisma";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { DashboardNav } from "./dashboard-nav";
 import { UserMenu } from "./user-menu";
 
@@ -41,13 +40,6 @@ export default async function DashboardLayout({
     });
   }
 
-  const initials = profile.fullName
-    .split(" ")
-    .map((part) => part[0])
-    .slice(0, 2)
-    .join("")
-    .toUpperCase();
-
   return (
     <div className="flex min-h-screen flex-col bg-muted/30">
       <header className="sticky top-0 z-40 border-b bg-background/80 backdrop-blur-md">
@@ -62,14 +54,7 @@ export default async function DashboardLayout({
             </Link>
             <DashboardNav />
           </div>
-          <div className="flex items-center gap-3">
-            <UserMenu fullName={profile.fullName} email={profile.email} />
-            <Avatar className="size-8">
-              <AvatarFallback className="bg-red-600 text-xs font-semibold text-white">
-                {initials}
-              </AvatarFallback>
-            </Avatar>
-          </div>
+          <UserMenu fullName={profile.fullName} email={profile.email} />
         </div>
       </header>
       <main className="flex-1">
