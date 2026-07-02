@@ -105,6 +105,8 @@ model ChitMember {
   member   Member   @relation(fields: [memberId], references: [id], onDelete: Cascade)
   joinedAt DateTime @default(now())
 
+  payments MemberPayment[]
+
   @@unique([chitId, memberId])
   @@index([chitId])
   @@map("chit_members")
@@ -119,6 +121,7 @@ model MonthlyAuction {
   status     MonthStatus @default(PENDING)
 
   calculation MonthlyCalculation?
+  payments    MemberPayment[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -126,6 +129,24 @@ model MonthlyAuction {
   @@unique([chitId, monthIndex])
   @@index([chitId])
   @@map("monthly_auctions")
+}
+
+model MemberPayment {
+  id               String         @id @default(uuid())
+  monthlyAuctionId String
+  monthlyAuction   MonthlyAuction @relation(fields: [monthlyAuctionId], references: [id], onDelete: Cascade)
+  chitMemberId     String
+  chitMember       ChitMember     @relation(fields: [chitMemberId], references: [id], onDelete: Cascade)
+
+  amountPaid Decimal @db.Decimal(12, 2)
+  paid       Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([monthlyAuctionId, chitMemberId])
+  @@index([monthlyAuctionId])
+  @@map("member_payments")
 }
 
 model MonthlyCalculation {
