@@ -6,7 +6,17 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import toast from "react-hot-toast";
-import { ArrowLeft, Calculator, CheckCircle2, Users, Check } from "lucide-react";
+import {
+  ArrowLeft,
+  Calculator,
+  CheckCircle2,
+  Users,
+  Check,
+  Pencil,
+  IndianRupee,
+  Wallet,
+  Percent,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -26,7 +36,9 @@ import {
   CardDescription,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
 import { FadeIn } from "@/components/shared/fade-in";
+import { StatCard } from "@/components/shared/stat-card";
 import { ShareCalculation } from "@/components/shared/share-calculation";
 import {
   recordAuctionResult,
@@ -82,15 +94,18 @@ function MemberPaymentRowItem({
   auctionId,
   member,
   suggestedAmount,
+  onPaidChange,
 }: {
   auctionId: string;
   member: MemberPaymentRow;
   suggestedAmount: string | null;
+  onPaidChange: (paid: boolean, amount: number) => void;
 }) {
   const [amount, setAmount] = useState(
     member.amountPaid !== "0" ? member.amountPaid : suggestedAmount ?? "0"
   );
   const [paid, setPaid] = useState(member.paid);
+  const [editing, setEditing] = useState(!member.paid);
   const [saving, setSaving] = useState(false);
 
   async function onSave() {
@@ -104,9 +119,14 @@ function MemberPaymentRowItem({
       toast.error(result.error);
       return;
     }
-    setPaid(Number(amount) > 0);
+    const isPaid = Number(amount) > 0;
+    setPaid(isPaid);
+    setEditing(false);
+    onPaidChange(isPaid, Number(amount));
     toast.success(`Saved payment for ${member.name}.`);
   }
+
+  const locked = paid && !editing;
 
   return (
     <div className="flex items-center gap-3 border-b py-3 last:border-0">
@@ -123,18 +143,30 @@ function MemberPaymentRowItem({
         type="number"
         min={0}
         value={amount}
+        disabled={locked}
         onChange={(e) => setAmount(e.target.value)}
         className="w-28"
       />
-      <Button
-        size="icon-sm"
-        variant={paid ? "secondary" : "outline"}
-        disabled={saving}
-        onClick={onSave}
-        title="Save payment"
-      >
-        <Check className={paid ? "text-emerald-600" : ""} />
-      </Button>
+      {locked ? (
+        <Button
+          size="icon-sm"
+          variant="secondary"
+          onClick={() => setEditing(true)}
+          title="Edit payment"
+        >
+          <Pencil />
+        </Button>
+      ) : (
+        <Button
+          size="icon-sm"
+          variant="outline"
+          disabled={saving}
+          onClick={onSave}
+          title="Save payment"
+        >
+          <Check className={paid ? "text-emerald-600" : ""} />
+        </Button>
+      )}
     </div>
   );
 }
@@ -162,6 +194,20 @@ export function AuctionDetailClient({
   const [submitting, setSubmitting] = useState(false);
   const [calculation, setCalculation] = useState(auction.calculation);
   const [status, setStatus] = useState(auction.status);
+  const [paymentState, setPaymentState] = useState(() =>
+    new Map(members.map((m) => [m.chitMemberId, { paid: m.paid, amount: Number(m.amountPaid) }]))
+  );
+
+  const paidCount = Array.from(paymentState.values()).filter((p) => p.paid).length;
+  const totalCollected = Array.from(paymentState.values()).reduce(
+    (sum, p) => sum + (p.paid ? p.amount : 0),
+    0
+  );
+  const collectionProgress =
+    members.length > 0 ? Math.round((paidCount / members.length) * 100) : 0;
+  const expectedTotal = calculation
+    ? Number(calculation.payablePerPerson) * members.length
+    : 0;
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -244,6 +290,41 @@ export function AuctionDetailClient({
           {status.replace("_", " ")}
         </Badge>
       </div>
+
+      {members.length > 0 && (
+        <FadeIn>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <StatCard
+              label="Collected"
+              value={formatCurrency(totalCollected)}
+              icon={IndianRupee}
+              accent="success"
+            />
+            <StatCard
+              label="Expected Total"
+              value={calculation ? formatCurrency(expectedTotal) : "-"}
+              icon={Wallet}
+            />
+            <StatCard
+              label="Members Paid"
+              value={`${paidCount}/${members.length}`}
+              icon={Users}
+              accent={paidCount === members.length ? "success" : "warning"}
+            />
+            <Card>
+              <CardContent className="flex flex-col justify-center gap-2">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="flex items-center gap-1.5 text-muted-foreground">
+                    <Percent className="size-3.5" /> Collection Progress
+                  </span>
+                  <span className="font-semibold">{collectionProgress}%</span>
+                </div>
+                <Progress value={collectionProgress} />
+              </CardContent>
+            </Card>
+          </div>
+        </FadeIn>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-2">
         <FadeIn>
@@ -341,6 +422,13 @@ export function AuctionDetailClient({
                       member={member}
                       suggestedAmount={
                         calculation ? calculation.payablePerPerson : null
+                      }
+                      onPaidChange={(paid, amount) =>
+                        setPaymentState((prev) => {
+                          const next = new Map(prev);
+                          next.set(member.chitMemberId, { paid, amount });
+                          return next;
+                        })
                       }
                     />
                   ))}
