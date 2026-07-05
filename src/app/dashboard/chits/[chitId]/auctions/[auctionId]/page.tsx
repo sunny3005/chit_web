@@ -31,6 +31,7 @@ export default async function AuctionDetailPage({
       },
       calculation: true,
       payments: true,
+      winner: { include: { member: true } },
     },
   });
 
@@ -53,6 +54,8 @@ export default async function AuctionDetailPage({
         id: auction.id,
         monthLabel: auction.monthLabel,
         status: auction.status,
+        winnerChitMemberId: auction.winnerChitMemberId,
+        winnerName: auction.winner?.member.name ?? null,
         calculation: auction.calculation
           ? {
               commissionPercent: auction.calculation.commissionPercent.toString(),
@@ -73,6 +76,8 @@ export default async function AuctionDetailPage({
           phone: cm.member.phone,
           amountPaid: payment ? payment.amountPaid.toString() : "0",
           paid: payment?.paid ?? false,
+          prized: cm.prized,
+          prizedMonth: cm.prizedMonth,
         };
       })}
     />

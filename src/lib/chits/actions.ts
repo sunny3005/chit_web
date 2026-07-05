@@ -357,6 +357,82 @@ export async function recordAuctionResult(
   return { success: true };
 }
 
+export async function setAuctionWinner(
+  monthlyAuctionId: string,
+  chitMemberId: string
+): Promise<ActionResult> {
+  const ownerId = await requireUserId();
+
+  const auction = await prisma.monthlyAuction.findFirst({
+    where: { id: monthlyAuctionId, chit: { ownerId } },
+    include: { calculation: true },
+  });
+  if (!auction) {
+    return { error: "Auction not found." };
+  }
+  if (!auction.calculation) {
+    return { error: "Record the auction result before selecting a winner." };
+  }
+
+  const chitMember = await prisma.chitMember.findFirst({
+    where: { id: chitMemberId, chitId: auction.chitId },
+  });
+  if (!chitMember) {
+    return { error: "Member not found in this chit." };
+  }
+  if (chitMember.prized) {
+    return {
+      error: "This member already won a previous month and cannot win again.",
+    };
+  }
+
+  await prisma.$transaction([
+    prisma.monthlyAuction.update({
+      where: { id: monthlyAuctionId },
+      data: { winnerChitMemberId: chitMemberId },
+    }),
+    prisma.chitMember.update({
+      where: { id: chitMemberId },
+      data: { prized: true, prizedMonth: auction.monthIndex },
+    }),
+  ]);
+
+  revalidatePath(`/dashboard/chits/${auction.chitId}`);
+  revalidatePath(`/dashboard/chits/${auction.chitId}/auctions/${monthlyAuctionId}`);
+  return { success: true };
+}
+
+export async function clearAuctionWinner(
+  monthlyAuctionId: string
+): Promise<ActionResult> {
+  const ownerId = await requireUserId();
+
+  const auction = await prisma.monthlyAuction.findFirst({
+    where: { id: monthlyAuctionId, chit: { ownerId } },
+  });
+  if (!auction) {
+    return { error: "Auction not found." };
+  }
+  if (!auction.winnerChitMemberId) {
+    return { success: true };
+  }
+
+  await prisma.$transaction([
+    prisma.monthlyAuction.update({
+      where: { id: monthlyAuctionId },
+      data: { winnerChitMemberId: null },
+    }),
+    prisma.chitMember.update({
+      where: { id: auction.winnerChitMemberId },
+      data: { prized: false, prizedMonth: null },
+    }),
+  ]);
+
+  revalidatePath(`/dashboard/chits/${auction.chitId}`);
+  revalidatePath(`/dashboard/chits/${auction.chitId}/auctions/${monthlyAuctionId}`);
+  return { success: true };
+}
+
 export async function markAuctionCompleted(
   monthlyAuctionId: string
 ): Promise<ActionResult> {

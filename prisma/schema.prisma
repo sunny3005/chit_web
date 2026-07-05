@@ -105,7 +105,11 @@ model ChitMember {
   member   Member   @relation(fields: [memberId], references: [id], onDelete: Cascade)
   joinedAt DateTime @default(now())
 
-  payments MemberPayment[]
+  prized      Boolean         @default(false)
+  prizedMonth Int?
+
+  payments      MemberPayment[]
+  wonAuctions   MonthlyAuction[] @relation("AuctionWinner")
 
   @@unique([chitId, memberId])
   @@index([chitId])
@@ -120,6 +124,9 @@ model MonthlyAuction {
   monthLabel String
   status     MonthStatus @default(PENDING)
 
+  winnerChitMemberId String?
+  winner             ChitMember? @relation("AuctionWinner", fields: [winnerChitMemberId], references: [id], onDelete: SetNull)
+
   calculation MonthlyCalculation?
   payments    MemberPayment[]
 
@@ -128,6 +135,7 @@ model MonthlyAuction {
 
   @@unique([chitId, monthIndex])
   @@index([chitId])
+  @@index([winnerChitMemberId])
   @@map("monthly_auctions")
 }
 

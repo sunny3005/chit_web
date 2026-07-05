@@ -16,6 +16,8 @@ import {
   IndianRupee,
   Wallet,
   Percent,
+  Crown,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -37,6 +39,13 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { FadeIn } from "@/components/shared/fade-in";
 import { StatCard } from "@/components/shared/stat-card";
 import { ShareCalculation } from "@/components/shared/share-calculation";
@@ -44,6 +53,8 @@ import {
   recordAuctionResult,
   markAuctionCompleted,
   saveMemberPayment,
+  setAuctionWinner,
+  clearAuctionWinner,
 } from "@/lib/chits/actions";
 import { formatCurrency } from "@/lib/format";
 import { buildAuctionShareMessage } from "@/lib/chits/share";
@@ -64,6 +75,8 @@ export type MemberPaymentRow = {
   phone: string;
   amountPaid: string;
   paid: boolean;
+  prized: boolean;
+  prizedMonth: number | null;
 };
 
 const schema = z.object({
@@ -136,7 +149,18 @@ function MemberPaymentRowItem({
         </AvatarFallback>
       </Avatar>
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium">{member.name}</p>
+        <div className="flex items-center gap-1.5">
+          <p className="truncate text-sm font-medium">{member.name}</p>
+          {member.prized && (
+            <Badge
+              variant="outline"
+              className="gap-1 border-amber-500/40 text-amber-600 dark:text-amber-400"
+            >
+              <Crown className="size-3" />
+              Prized{member.prizedMonth ? ` M${member.prizedMonth}` : ""}
+            </Badge>
+          )}
+        </div>
         <p className="truncate text-xs text-muted-foreground">{member.phone}</p>
       </div>
       <Input
@@ -188,15 +212,59 @@ export function AuctionDetailClient({
     monthLabel: string;
     status: "PENDING" | "AUCTION_DONE" | "COMPLETED";
     calculation: Calculation | null;
+    winnerChitMemberId: string | null;
+    winnerName: string | null;
   };
   members: MemberPaymentRow[];
 }) {
   const [submitting, setSubmitting] = useState(false);
   const [calculation, setCalculation] = useState(auction.calculation);
   const [status, setStatus] = useState(auction.status);
+  const [winnerId, setWinnerId] = useState(auction.winnerChitMemberId);
+  const [winnerName, setWinnerName] = useState(auction.winnerName);
+  const [prizedMap, setPrizedMap] = useState(() =>
+    new Map(members.map((m) => [m.chitMemberId, m.prized]))
+  );
+  const [winnerSubmitting, setWinnerSubmitting] = useState(false);
   const [paymentState, setPaymentState] = useState(() =>
     new Map(members.map((m) => [m.chitMemberId, { paid: m.paid, amount: Number(m.amountPaid) }]))
   );
+
+  const eligibleMembers = members.filter(
+    (m) => !prizedMap.get(m.chitMemberId) || m.chitMemberId === winnerId
+  );
+
+  async function onSelectWinner(chitMemberId: string) {
+    setWinnerSubmitting(true);
+    const result = await setAuctionWinner(auction.id, chitMemberId);
+    setWinnerSubmitting(false);
+
+    if ("error" in result) {
+      toast.error(result.error);
+      return;
+    }
+    const member = members.find((m) => m.chitMemberId === chitMemberId);
+    setWinnerId(chitMemberId);
+    setWinnerName(member?.name ?? null);
+    setPrizedMap((prev) => new Map(prev).set(chitMemberId, true));
+    toast.success(`${member?.name} marked as this month's prized member.`);
+  }
+
+  async function onClearWinner() {
+    if (!winnerId) return;
+    setWinnerSubmitting(true);
+    const result = await clearAuctionWinner(auction.id);
+    setWinnerSubmitting(false);
+
+    if ("error" in result) {
+      toast.error(result.error);
+      return;
+    }
+    setPrizedMap((prev) => new Map(prev).set(winnerId, false));
+    setWinnerId(null);
+    setWinnerName(null);
+    toast.success("Winner selection cleared.");
+  }
 
   const paidCount = Array.from(paymentState.values()).filter((p) => p.paid).length;
   const totalCollected = Array.from(paymentState.values()).reduce(
@@ -398,6 +466,62 @@ export function AuctionDetailClient({
             </CardContent>
           </Card>
 
+          {calculation && (
+            <Card className="mt-6">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Crown className="size-4 text-amber-500" />
+                  Auction Winner
+                </CardTitle>
+                <CardDescription>
+                  Mark who won this month&apos;s auction. Members who already
+                  won a previous month are excluded.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {winnerId ? (
+                  <div className="flex items-center justify-between rounded-lg bg-amber-50 px-4 py-3 dark:bg-amber-950/20">
+                    <span className="flex items-center gap-2 font-medium">
+                      <Crown className="size-4 text-amber-500" />
+                      {winnerName}
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      disabled={winnerSubmitting}
+                      onClick={onClearWinner}
+                      title="Clear winner"
+                    >
+                      <X className="size-4" />
+                    </Button>
+                  </div>
+                ) : eligibleMembers.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    All members have already won a previous month.
+                  </p>
+                ) : (
+                  <Select<string>
+                    disabled={winnerSubmitting}
+                    onValueChange={(value) => {
+                      if (value) onSelectWinner(value);
+                    }}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select this month's winner" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {eligibleMembers.map((m) => (
+                        <SelectItem key={m.chitMemberId} value={m.chitMemberId}>
+                          {m.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
           <Card className="mt-6">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -419,7 +543,10 @@ export function AuctionDetailClient({
                     <MemberPaymentRowItem
                       key={member.chitMemberId}
                       auctionId={auction.id}
-                      member={member}
+                      member={{
+                        ...member,
+                        prized: prizedMap.get(member.chitMemberId) ?? member.prized,
+                      }}
                       suggestedAmount={
                         calculation ? calculation.payablePerPerson : null
                       }

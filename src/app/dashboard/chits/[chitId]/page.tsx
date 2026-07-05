@@ -53,8 +53,11 @@ export default async function ChitDetailPage({
         startYear: chit.startYear,
         members: chit.chitMembers.map((cm) => ({
           id: cm.member.id,
+          chitMemberId: cm.id,
           name: cm.member.name,
           phone: cm.member.phone,
+          prized: cm.prized,
+          prizedMonth: cm.prizedMonth,
         })),
         auctions: chit.monthlyAuctions.map((a) => ({
           id: a.id,

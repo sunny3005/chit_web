@@ -7,7 +7,15 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import toast from "react-hot-toast";
-import { Users, Trash2, Pencil } from "lucide-react";
+import {
+  Users,
+  Trash2,
+  Pencil,
+  Crown,
+  BookOpen,
+  FileSpreadsheet,
+  FileText,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
@@ -65,6 +73,11 @@ import {
 import { formatCurrency, MONTH_NAMES } from "@/lib/format";
 
 type Member = { id: string; name: string; phone: string };
+type ChitMemberRow = Member & {
+  chitMemberId: string;
+  prized: boolean;
+  prizedMonth: number | null;
+};
 type Calculation = {
   interestPercent: string;
   chitAmount: string;
@@ -91,7 +104,7 @@ type ChitDetail = {
   numberOfMembers: number;
   description: string | null;
   status: "ACTIVE" | "INACTIVE";
-  members: Member[];
+  members: ChitMemberRow[];
   auctions: Auction[];
   startMonth: number | null;
   startYear: number | null;
@@ -496,7 +509,25 @@ export function ChitDetailClient({
             <p className="mt-1 text-muted-foreground">{chit.description}</p>
           )}
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            render={
+              <a href={`/api/exports/chit-report/${chit.id}?format=excel`} download />
+            }
+          >
+            <FileSpreadsheet className="size-4" /> Excel
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            render={
+              <a href={`/api/exports/chit-report/${chit.id}?format=pdf`} download />
+            }
+          >
+            <FileText className="size-4" /> PDF
+          </Button>
           <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
             <Pencil className="size-4" /> Edit Chit
           </Button>
@@ -560,6 +591,62 @@ export function ChitDetailClient({
         open={membersOpen}
         onOpenChange={setMembersOpen}
       />
+
+      {chit.members.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Members</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Phone</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Passbook</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {chit.members.map((member) => (
+                  <TableRow key={member.chitMemberId}>
+                    <TableCell className="font-medium">{member.name}</TableCell>
+                    <TableCell>{member.phone}</TableCell>
+                    <TableCell>
+                      {member.prized ? (
+                        <Badge
+                          variant="outline"
+                          className="gap-1 border-amber-500/40 text-amber-600 dark:text-amber-400"
+                        >
+                          <Crown className="size-3" />
+                          Prized{member.prizedMonth ? ` (Month ${member.prizedMonth})` : ""}
+                        </Badge>
+                      ) : (
+                        <span className="text-sm text-muted-foreground">
+                          Not yet prized
+                        </span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        render={
+                          <Link
+                            href={`/dashboard/chits/${chit.id}/members/${member.chitMemberId}`}
+                          />
+                        }
+                      >
+                        <BookOpen className="size-4" /> View
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>
